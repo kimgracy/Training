@@ -70,7 +70,7 @@ Training/
 | `weights/last.pt` | Last epoch model checkpoint. |
 | `metadata.yaml` | Registry metadata for a promoted model. |
 
-## `.ps1` Files?
+## `.ps1` Files
 
 | Script | Purpose |
 | --- | --- |

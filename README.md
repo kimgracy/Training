@@ -70,9 +70,7 @@ Training/
 | `weights/last.pt` | Last epoch model checkpoint. |
 | `metadata.yaml` | Registry metadata for a promoted model. |
 
-## What Are `.ps1` Files?
-
-`.ps1` files are PowerShell scripts. They let you run repeatable command sequences without typing long YOLO commands manually each time.
+## `.ps1` Files?
 
 | Script | Purpose |
 | --- | --- |
@@ -322,20 +320,3 @@ models/registry/
 ```
 
 Raw images, labels, run outputs, and model weights are usually large and change often. Store them in a shared drive, NAS, artifact storage, or another dataset/model storage system instead of Git.
-
-## Current `0706_v1` Dataset Notes
-
-Current dataset summary:
-
-```text
-total_images: 60
-total_bboxes: 42
-train_images: 48
-train_positive_images: 1
-train_bboxes: 4
-val_images: 12
-val_positive_images: 6
-val_bboxes: 38
-```
-
-The current split is skewed: most positive samples are in validation rather than training. This is preserved for reproducibility of the existing run, but future experiments should regenerate a better-balanced split.

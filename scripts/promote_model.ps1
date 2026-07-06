@@ -1,20 +1,31 @@
 [CmdletBinding()]
 param(
     [string]$Dataset = "0706_v1",
-    [string]$RunName = "ps_yolo11s",
-    [string]$ModelFamily = "ps_yolo11s",
+    [string]$RunName = "",
+    [string]$ModelFamily = "",
     [string]$RegistryName = "",
     [string]$Status = "candidate"
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "_run_utils.ps1")
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+
+if ([string]::IsNullOrWhiteSpace($RunName)) {
+    $LatestRun = Get-LatestYoloTrainRun -Root $Root -Dataset $Dataset
+    $RunName = $LatestRun.Name
+}
+
+if ([string]::IsNullOrWhiteSpace($ModelFamily)) {
+    $ModelFamily = Get-YoloModelFamilyFromRunName -RunName $RunName
+}
+
 $SourceRun = Join-Path $Root "runs\train\$Dataset\$RunName"
 
 if ([string]::IsNullOrWhiteSpace($RegistryName)) {
-    $Timestamp = Get-Date -Format "yyyyMMdd_HHmm"
-    $RegistryName = "${Timestamp}_${Dataset}"
+    $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $RegistryName = "${Timestamp}_${Dataset}_${RunName}"
 }
 
 $Dest = Join-Path $Root "models\registry\ps_particle\$ModelFamily\$RegistryName"
@@ -41,10 +52,17 @@ foreach ($FileName in @("args.yaml", "results.csv", "results.png", "confusion_ma
 
 $PredictRoot = Join-Path $Root "runs\predict\$Dataset"
 if (Test-Path -LiteralPath $PredictRoot) {
-    Get-ChildItem -Path $PredictRoot -Recurse -File -Include "*.jpg", "*.png" |
-        Select-Object -First 8 |
+    Get-ChildItem -Path $PredictRoot -Directory |
+        Where-Object { $_.Name -like "$RunName*" } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1 |
         ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $Samples $_.Name) -Force
+            Get-ChildItem -Path $_.FullName -File |
+                Where-Object { $_.Extension -in @(".jpg", ".jpeg", ".png") } |
+                Select-Object -First 8 |
+                ForEach-Object {
+                    Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $Samples $_.Name) -Force
+                }
         }
 }
 
@@ -62,4 +80,5 @@ promoted_at: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
 $Metadata | Set-Content -Path (Join-Path $Dest "metadata.yaml") -Encoding UTF8
 
+Write-Host "source training run: $RunName"
 Write-Host "promoted: $Dest"

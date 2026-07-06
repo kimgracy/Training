@@ -5,6 +5,7 @@ import csv
 import json
 import random
 import shutil
+import sys
 from pathlib import Path
 
 
@@ -14,7 +15,7 @@ IGNORED_LABEL_FILES = {"train.txt", "val.txt", "test.txt", "obj.names", "obj.dat
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare a YOLO detection dataset.")
-    parser.add_argument("--dataset", default="0706_v1", help="Dataset version under exports/.")
+    parser.add_argument("--dataset", default="", help="Dataset version under exports/. Required for non-interactive runs.")
     parser.add_argument("--val-ratio", type=float, default=0.2, help="Validation split ratio.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for splitting.")
     parser.add_argument("--class-name", default="ps_particle", help="Single class name.")
@@ -28,7 +29,98 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Overwrite data/yolo/<dataset> if it already exists.",
     )
-    return parser.parse_args()
+    interactive = len(sys.argv) == 1
+    args = parser.parse_args()
+    args.interactive = interactive
+    if interactive:
+        args = prompt_for_args(args)
+    elif not args.dataset.strip():
+        parser.error("--dataset is required for non-interactive runs.")
+    return args
+
+
+def read_choice(prompt: str, default: bool = True) -> bool:
+    suffix = "[Y/n]" if default else "[y/N]"
+    while True:
+        answer = input(f"{prompt} {suffix} ").strip().lower()
+        if not answer:
+            return default
+        if answer in {"y", "yes"}:
+            return True
+        if answer in {"n", "no"}:
+            return False
+        print("Please enter Y or N.")
+
+
+def read_str_with_default(name: str, default: str) -> str:
+    value = input(f"{name} [{default}]: ").strip()
+    return value or default
+
+
+def read_required_str(name: str) -> str:
+    while True:
+        value = input(f"{name} [required]: ").strip()
+        if value:
+            return value
+        print(f"{name} is required.")
+
+
+def read_int_with_default(name: str, default: int) -> int:
+    while True:
+        value = input(f"{name} [{default}]: ").strip()
+        if not value:
+            return default
+        try:
+            return int(value)
+        except ValueError:
+            print("Please enter an integer.")
+
+
+def read_float_with_default(name: str, default: float) -> float:
+    while True:
+        value = input(f"{name} [{default}]: ").strip()
+        if not value:
+            return default
+        try:
+            parsed = float(value)
+        except ValueError:
+            print("Please enter a number.")
+            continue
+        if 0 < parsed < 1:
+            return parsed
+        print("Please enter a value between 0 and 1.")
+
+
+def prompt_for_args(args: argparse.Namespace) -> argparse.Namespace:
+    print("No dataset preparation parameters were provided.")
+    print()
+    print("Dataset has no default and must be entered before continuing.")
+    args.dataset = read_required_str("Dataset")
+    print()
+    print("Selected dataset:")
+    print(f"  Dataset        : {args.dataset}")
+    print()
+    print("Default parameters for the remaining fields:")
+    print(f"  Val ratio      : {args.val_ratio}")
+    print(f"  Seed           : {args.seed}")
+    print(f"  Class name     : {args.class_name}")
+    print(f"  Keep class IDs : {'yes' if args.keep_class_ids else 'no (remap labels to class 0)'}")
+    print(f"  Overwrite      : {'yes' if args.overwrite else 'no'}")
+    print()
+
+    use_defaults = read_choice("Use these default parameters?", default=True)
+    if use_defaults:
+        print()
+        return args
+
+    print("Enter dataset preparation parameters. Press Enter to keep the value shown in brackets.")
+    args.val_ratio = read_float_with_default("Val ratio", args.val_ratio)
+    args.seed = read_int_with_default("Seed", args.seed)
+    args.class_name = read_str_with_default("Class name", args.class_name)
+    args.keep_class_ids = read_choice("Keep original class IDs instead of remapping to 0?", default=args.keep_class_ids)
+    args.overwrite = read_choice("Overwrite output dataset if it already exists?", default=args.overwrite)
+    print()
+    return args
 
 
 def find_images(root: Path) -> list[Path]:
@@ -89,10 +181,13 @@ def main() -> None:
 
     if not raw_dir.exists():
         raise RuntimeError(f"Export directory not found: {raw_dir}")
-    if out_dir.exists() and args.overwrite:
-        shutil.rmtree(out_dir)
     if out_dir.exists() and any(out_dir.iterdir()):
-        raise RuntimeError(f"Output dataset already exists. Use --overwrite to replace: {out_dir}")
+        if not args.overwrite and args.interactive:
+            args.overwrite = read_choice(f"Output dataset already exists: {out_dir}. Overwrite it?", default=False)
+        if args.overwrite:
+            shutil.rmtree(out_dir)
+        else:
+            raise RuntimeError(f"Output dataset already exists. Use --overwrite to replace: {out_dir}")
 
     images = find_images(raw_dir)
     if not images:

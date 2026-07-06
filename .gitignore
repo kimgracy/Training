@@ -1,32 +1,88 @@
-# Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
+# Ignore everything by default. The allowlist below keeps only source code,
+# lightweight configs, documentation, and dataset metadata in Git.
+*
 
-# Local environments
-.venv/
-venv/
-env/
+# Repository metadata and documentation
+!.gitignore
+!.gitattributes
+!README.md
+!LICENSE*
 
-# Large/raw datasets
+# Root-level convenience scripts
+!train.ps1
+
+# Source scripts
+!scripts/
+!scripts/**
+
+# Training/config files
+!configs/
+!configs/**
+
+# Lightweight dataset metadata only
+!data/
+!data/yolo/
+!data/yolo/*/
+!data/yolo/*/blood_ps.yaml
+!data/yolo/*/manifest.csv
+!data/yolo/*/dataset_stats.json
+
+# Production model pointer/config only
+!models/
+!models/production/
+!models/production/**
+
+# Optional GitHub metadata if added later
+!.github/
+!.github/**
+
+# Explicitly keep large/raw/generated artifacts out of Git
 exports/
+runs/
+models/registry/
 data/yolo/*/images/
 data/yolo/*/labels/
 
-# YOLO outputs and caches
-runs/
-*.cache
-
-# Model weights and exported models
+# Model weights and exported model binaries
 *.pt
+*.pth
 *.onnx
 *.engine
 *.torchscript
 *.tflite
 *.pb
+*.mlmodel
+*.bin
 
-# Managed model registry can contain large weights and images
-models/registry/
+# Common image/video/data artifacts
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.csv.cache
+*.cache
+
+# Python/cache/build artifacts
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Local environments
+.venv/
+venv/
+env/
+.env
+.env.*
 
 # OS/editor noise
 .DS_Store

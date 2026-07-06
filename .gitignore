@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Large/raw datasets
+exports/
+data/yolo/*/images/
+data/yolo/*/labels/
+
+# YOLO outputs and caches
+runs/
+*.cache
+
+# Model weights and exported models
+*.pt
+*.onnx
+*.engine
+*.torchscript
+*.tflite
+*.pb
+
+# Managed model registry can contain large weights and images
+models/registry/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local Codex workspace metadata
+.agents/
+.codex/

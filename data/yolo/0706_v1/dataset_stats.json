@@ -1,0 +1,12 @@
+﻿{
+    "dataset":  "0706_v1",
+    "class_name":  "ps_particle",
+    "total_images":  60,
+    "total_bboxes":  42,
+    "train_images":  48,
+    "train_positive_images":  1,
+    "train_bboxes":  4,
+    "val_images":  12,
+    "val_positive_images":  6,
+    "val_bboxes":  38
+}

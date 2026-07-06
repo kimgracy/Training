@@ -1,0 +1,13 @@
+task: detect
+mode: train
+model: yolo11s.pt
+data: data/yolo/0706_v1/blood_ps.yaml
+imgsz: 960
+epochs: 100
+batch: 4
+device: 0
+seed: 0
+patience: 100
+project: runs/train/0706_v1
+name: ps_yolo11s_img960_e100_b4_s0
+plots: true

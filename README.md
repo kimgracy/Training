@@ -1,8 +1,8 @@
 # Blood PS YOLO Training Guide
 
-혈액 PS particle detection 모델 학습을 위한 YOLO 프로젝트입니다. 이 repository는 데이터셋 버전 관리, 학습/검증 실행, prediction 결과 확인, 모델 registry 관리를 쉽게 하기 위한 구조로 정리되어 있습니다.
+This repository contains a YOLO-based workflow for training and managing a blood PS particle detection model. It is organized to keep raw exports, YOLO-ready datasets, training outputs, prediction outputs, and promoted model artifacts separate.
 
-## 1. 프로젝트 구조
+## Project Structure
 
 ```text
 Training/
@@ -42,76 +42,74 @@ Training/
    `- promote_model.ps1
 ```
 
-## 2. 주요 폴더 역할
+## Directory Roles
 
-| 경로 | 역할 |
+| Path | Purpose |
 | --- | --- |
-| `exports/<dataset_version>/` | 원본 export 데이터 보관 위치입니다. 원본 보존을 위해 직접 수정하지 않는 것을 권장합니다. |
-| `data/yolo/<dataset_version>/` | YOLO 학습용으로 변환된 데이터셋입니다. |
-| `runs/train/<dataset_version>/` | YOLO training 결과가 저장됩니다. |
-| `runs/val/<dataset_version>/` | 학습된 모델의 validation 결과가 저장됩니다. |
-| `runs/predict/<dataset_version>/` | prediction 시각화 이미지가 저장됩니다. |
-| `models/registry/` | 보관할 가치가 있는 모델과 핵심 산출물을 복사해 관리합니다. |
-| `models/production/current.yaml` | 실제 사용 모델을 지정하기 위한 파일입니다. |
-| `configs/train/` | 학습 설정 기록용 config 파일을 보관합니다. |
-| `scripts/` | 데이터 준비, 학습, 검증, prediction, 모델 승격 자동화 스크립트입니다. |
+| `exports/<dataset_version>/` | Raw exported data. Treat this as read-only source data. |
+| `data/yolo/<dataset_version>/` | YOLO-ready dataset generated from the raw export. |
+| `runs/train/<dataset_version>/` | Training outputs from `yolo detect train`. |
+| `runs/val/<dataset_version>/` | Validation outputs from `yolo detect val`. |
+| `runs/predict/<dataset_version>/` | Prediction visualization outputs from `yolo detect predict`. |
+| `models/registry/` | Curated model artifacts worth keeping for comparison or future use. |
+| `models/production/current.yaml` | Pointer file for the currently selected production model. |
+| `configs/train/` | Training configuration records. |
+| `scripts/` | Automation scripts for dataset preparation, training, validation, prediction, and model promotion. |
 
-## 3. 주요 파일 역할
+## Important Files
 
-| 파일 | 역할 |
+| File | Purpose |
 | --- | --- |
-| `blood_ps.yaml` | YOLO가 읽는 dataset 설정 파일입니다. train/val 경로와 class 이름을 정의합니다. |
-| `manifest.csv` | 이미지별 split, label 경로, bbox 개수를 기록합니다. |
-| `dataset_stats.json` | 데이터셋 이미지 수, positive image 수, bbox 수를 요약합니다. |
-| `results.csv` | epoch별 loss, precision, recall, mAP 기록입니다. |
-| `results.png` | 학습 곡선 이미지입니다. |
-| `confusion_matrix.png` | confusion matrix 결과입니다. |
-| `weights/best.pt` | validation 기준 가장 좋은 모델 weight입니다. |
-| `weights/last.pt` | 마지막 epoch의 모델 weight입니다. |
-| `metadata.yaml` | registry에 보관한 모델의 데이터셋, run, 학습 조건 기록입니다. |
+| `blood_ps.yaml` | Dataset config read by YOLO. Defines train/val paths and class names. |
+| `manifest.csv` | Per-image split record, label path, source path, and bounding box count. |
+| `dataset_stats.json` | Dataset summary such as image count, positive image count, and bounding box count. |
+| `results.csv` | Per-epoch loss, precision, recall, and mAP values. |
+| `results.png` | Training curve plot. |
+| `confusion_matrix.png` | Confusion matrix image. |
+| `weights/best.pt` | Best model checkpoint selected by validation performance. |
+| `weights/last.pt` | Last epoch model checkpoint. |
+| `metadata.yaml` | Registry metadata for a promoted model. |
 
-## 4. `.ps1` 파일이란?
+## What Are `.ps1` Files?
 
-`.ps1`은 PowerShell script 파일입니다. PowerShell에서 여러 줄의 명령을 매번 직접 입력하지 않고, 하나의 파일로 실행할 수 있게 만든 자동화 스크립트입니다.
+`.ps1` files are PowerShell scripts. They let you run repeatable command sequences without typing long YOLO commands manually each time.
 
-이 프로젝트의 `.ps1` 파일은 다음 YOLO 명령을 쉽게 재사용하기 위한 wrapper입니다.
-
-| 스크립트 | 역할 |
+| Script | Purpose |
 | --- | --- |
-| `scripts/train.ps1` | `yolo detect train` 실행 |
-| `scripts/val.ps1` | `yolo detect val` 실행 |
-| `scripts/predict_val.ps1` | `yolo detect predict` 실행 |
-| `scripts/promote_model.ps1` | 좋은 모델을 `models/registry`로 복사 |
+| `scripts/train.ps1` | Runs `yolo detect train`. |
+| `scripts/val.ps1` | Runs `yolo detect val`. |
+| `scripts/predict_val.ps1` | Runs `yolo detect predict` on a validation split. |
+| `scripts/promote_model.ps1` | Copies selected model artifacts into `models/registry/`. |
 
-PowerShell에서 `.ps1` 실행이 막히면 현재 터미널 세션에서만 아래 명령으로 허용할 수 있습니다.
+If PowerShell blocks script execution, allow scripts for the current terminal session only:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-## 5. 환경 준비
+## Environment Setup
 
-프로젝트 루트로 이동합니다.
+Open PowerShell and move to the project root:
 
 ```powershell
 cd "C:\Users\Asus\Documents\KIST\혈액과제\Training"
 ```
 
-가상환경을 활성화합니다.
+Activate the training environment:
 
 ```powershell
 conda activate bloodps
 ```
 
-YOLO 명령이 동작하는지 확인합니다.
+Check that YOLO is available:
 
 ```powershell
 yolo checks
 ```
 
-## 6. 기존 데이터셋으로 새 학습 실행
+## Train With the Existing Dataset
 
-현재 정리된 데이터셋은 `0706_v1`입니다.
+The currently prepared dataset version is `0706_v1`.
 
 ```powershell
 .\scripts\train.ps1 `
@@ -125,13 +123,13 @@ yolo checks
   -RunName "ps_yolo11s_img960_e100_b4_s0_retry01"
 ```
 
-학습 결과는 아래 위치에서 확인합니다.
+Training outputs will be saved under:
 
 ```text
 runs/train/0706_v1/ps_yolo11s_img960_e100_b4_s0_retry01/
 ```
 
-주요 확인 파일은 다음과 같습니다.
+Key files to inspect:
 
 ```text
 weights/best.pt
@@ -142,9 +140,9 @@ confusion_matrix.png
 val_batch*_pred.jpg
 ```
 
-## 7. Validation 실행
+## Run Validation
 
-학습이 끝난 모델을 정량 평가합니다.
+Run quantitative validation for a trained model:
 
 ```powershell
 .\scripts\val.ps1 `
@@ -152,15 +150,15 @@ val_batch*_pred.jpg
   -RunName "ps_yolo11s_img960_e100_b4_s0_retry01"
 ```
 
-결과는 아래 위치에서 확인합니다.
+Validation outputs will be saved under:
 
 ```text
 runs/val/0706_v1/
 ```
 
-## 8. Prediction 이미지 생성
+## Generate Prediction Images
 
-validation 이미지에 대해 detection 결과 이미지를 저장합니다.
+Generate visual prediction results on the validation images:
 
 ```powershell
 .\scripts\predict_val.ps1 `
@@ -169,15 +167,15 @@ validation 이미지에 대해 detection 결과 이미지를 저장합니다.
   -Conf 0.15
 ```
 
-결과는 아래 위치에서 확인합니다.
+Prediction outputs will be saved under:
 
 ```text
 runs/predict/0706_v1/
 ```
 
-## 9. 좋은 모델을 registry로 보관
+## Promote a Good Model to the Registry
 
-성능이 괜찮은 run만 registry로 복사합니다.
+If a run looks useful, copy its core artifacts into the model registry:
 
 ```powershell
 .\scripts\promote_model.ps1 `
@@ -186,38 +184,38 @@ runs/predict/0706_v1/
   -RegistryName "20260706_retry01_0706_v1"
 ```
 
-결과는 아래 위치에 저장됩니다.
+Promoted model artifacts will be saved under:
 
 ```text
 models/registry/ps_particle/ps_yolo11s/20260706_retry01_0706_v1/
 ```
 
-## 10. 새로운 training set으로 학습하는 방법
+## Train With a New Dataset
 
-새 training set은 반드시 새 버전명으로 분리합니다. 예를 들어 `0708_v1`처럼 날짜와 버전을 함께 적습니다.
+Always create a new dataset version instead of overwriting an existing one. A recommended naming format is `<MMDD>_v<version>`, for example `0708_v1`.
 
-### 10.1 원본 데이터 배치
+### 1. Place Raw Data
 
-새 원본 데이터를 아래 위치에 둡니다.
+Place the new raw export here:
 
 ```text
 exports/0708_v1/
 ```
 
-이미지와 라벨 파일은 같은 stem을 가져야 합니다.
+Image and label filenames must share the same stem:
 
 ```text
 frame_000000.png
 frame_000000.txt
 ```
 
-YOLO detection label 형식은 다음과 같습니다.
+YOLO detection labels must use this format:
 
 ```text
 class_id x_center y_center width height
 ```
 
-### 10.2 YOLO 학습용 데이터셋 생성
+### 2. Prepare the YOLO Dataset
 
 ```powershell
 python .\scripts\prepare_yolo_dataset.py `
@@ -226,22 +224,31 @@ python .\scripts\prepare_yolo_dataset.py `
   --seed 42
 ```
 
-생성 결과:
+The generated dataset will be saved under:
 
 ```text
 data/yolo/0708_v1/
 ```
 
-먼저 아래 파일을 확인합니다.
+Check these files before training:
 
 ```text
 data/yolo/0708_v1/dataset_stats.json
 data/yolo/0708_v1/manifest.csv
 ```
 
-`train_positive_images`, `val_positive_images`, `train_bboxes`, `val_bboxes`가 너무 한쪽에 몰려 있으면 split을 다시 만드는 것을 권장합니다.
+Pay special attention to:
 
-### 10.3 새 데이터셋으로 training
+```text
+train_positive_images
+val_positive_images
+train_bboxes
+val_bboxes
+```
+
+If positive samples or bounding boxes are heavily skewed toward one split, regenerate the split before training.
+
+### 3. Train
 
 ```powershell
 .\scripts\train.ps1 `
@@ -255,13 +262,13 @@ data/yolo/0708_v1/manifest.csv
   -RunName "ps_yolo11s_img960_e100_b4_s0_0708_v1"
 ```
 
-결과:
+Training outputs:
 
 ```text
 runs/train/0708_v1/ps_yolo11s_img960_e100_b4_s0_0708_v1/
 ```
 
-### 10.4 Validation
+### 4. Validate
 
 ```powershell
 .\scripts\val.ps1 `
@@ -269,7 +276,7 @@ runs/train/0708_v1/ps_yolo11s_img960_e100_b4_s0_0708_v1/
   -RunName "ps_yolo11s_img960_e100_b4_s0_0708_v1"
 ```
 
-### 10.5 Prediction 확인
+### 5. Generate Prediction Images
 
 ```powershell
 .\scripts\predict_val.ps1 `
@@ -278,7 +285,7 @@ runs/train/0708_v1/ps_yolo11s_img960_e100_b4_s0_0708_v1/
   -Conf 0.15
 ```
 
-### 10.6 모델 registry 보관
+### 6. Promote the Model
 
 ```powershell
 .\scripts\promote_model.ps1 `
@@ -287,11 +294,11 @@ runs/train/0708_v1/ps_yolo11s_img960_e100_b4_s0_0708_v1/
   -RegistryName "20260708_0708_v1"
 ```
 
-## 11. Git 관리 정책
+## Git Policy
 
-Git에는 코드, 설정, 문서, 작은 메타데이터를 올리는 것을 권장합니다.
+Commit code, configs, documentation, and small metadata files.
 
-권장 포함:
+Recommended to commit:
 
 ```text
 README.md
@@ -303,7 +310,7 @@ data/yolo/*/manifest.csv
 data/yolo/*/dataset_stats.json
 ```
 
-권장 제외:
+Recommended to exclude:
 
 ```text
 exports/
@@ -314,11 +321,11 @@ models/registry/
 *.pt
 ```
 
-원본 이미지, 라벨, weight 파일은 용량이 크고 자주 바뀌므로 Git보다는 별도 공유 스토리지나 NAS에 보관하는 것이 좋습니다.
+Raw images, labels, run outputs, and model weights are usually large and change often. Store them in a shared drive, NAS, artifact storage, or another dataset/model storage system instead of Git.
 
-## 12. 현재 `0706_v1` 데이터셋 참고
+## Current `0706_v1` Dataset Notes
 
-현재 `0706_v1`의 요약은 다음과 같습니다.
+Current dataset summary:
 
 ```text
 total_images: 60
@@ -331,4 +338,4 @@ val_positive_images: 6
 val_bboxes: 38
 ```
 
-현재 split은 positive sample이 validation 쪽에 많이 몰려 있습니다. 기존 run 재현성은 유지되지만, 성능 개선 목적의 새 실험에서는 split을 다시 구성하는 것을 권장합니다.
+The current split is skewed: most positive samples are in validation rather than training. This is preserved for reproducibility of the existing run, but future experiments should regenerate a better-balanced split.

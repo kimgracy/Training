@@ -12,7 +12,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-. (Join-Path $PSScriptRoot "_run_utils.ps1")
+. (Join-Path $PSScriptRoot "..\_run_utils.ps1")
 
 function Read-Choice {
     param(
@@ -137,9 +137,9 @@ if ($PSBoundParameters.Count -eq 0) {
     Write-Host ""
 }
 
-$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if ([string]::IsNullOrWhiteSpace($Dataset)) {
-    throw "Dataset is required. Use -Dataset or run interactively and enter a dataset value."
+    $Dataset = Read-RequiredString -Name "Dataset"
 }
 $Data = Join-Path $Root "data\yolo\$Dataset\blood_ps.yaml"
 $Project = Join-Path $Root "runs\train\$Dataset"
@@ -165,20 +165,19 @@ Write-Host "output dir: $(Join-Path $Project $RunName)"
 
 Push-Location $Root
 try {
-    yolo detect train `
-        model=$Model `
-        data="$Data" `
-        imgsz=$ImgSize `
-        epochs=$Epochs `
-        batch=$Batch `
-        device=$Device `
-        seed=$Seed `
-        project="$Project" `
-        name="$RunName"
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "yolo detect train failed with exit code $LASTEXITCODE"
-    }
+    Invoke-Yolo -Arguments @(
+        "detect",
+        "train",
+        "model=$Model",
+        "data=$Data",
+        "imgsz=$ImgSize",
+        "epochs=$Epochs",
+        "batch=$Batch",
+        "device=$Device",
+        "seed=$Seed",
+        "project=$Project",
+        "name=$RunName"
+    )
 }
 finally {
     Pop-Location

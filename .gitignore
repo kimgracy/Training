@@ -8,9 +8,6 @@
 !README.md
 !LICENSE*
 
-# Root-level convenience scripts
-!train.ps1
-
 # Source scripts
 !scripts/
 !scripts/**
@@ -23,9 +20,21 @@
 !data/
 !data/yolo/
 !data/yolo/*/
+!data/yolo/*/dataset.yaml
 !data/yolo/*/blood_ps.yaml
 !data/yolo/*/manifest.csv
 !data/yolo/*/dataset_stats.json
+
+# Video-centered workflow metadata only
+!videos/
+!videos/*/
+!videos/*/video.yaml
+!videos/*/yolo/
+!videos/*/yolo/*/
+!videos/*/yolo/*/dataset.yaml
+!videos/*/yolo/*/blood_ps.yaml
+!videos/*/yolo/*/manifest.csv
+!videos/*/yolo/*/dataset_stats.json
 
 # Production model pointer/config only
 !models/
@@ -42,6 +51,11 @@ runs/
 models/registry/
 data/yolo/*/images/
 data/yolo/*/labels/
+videos/*/source/
+videos/*/exports/
+videos/*/runs/
+videos/*/yolo/*/images/
+videos/*/yolo/*/labels/
 
 # Model weights and exported model binaries
 *.pt

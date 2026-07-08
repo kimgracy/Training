@@ -1,14 +1,14 @@
-# Blood PS YOLO Training Guide
+# YOLO Video Workflow
 
-This guide explains the full workflow for training, validating, and visually checking a YOLO detection model from a CVAT-exported dataset. It is written for teammates who are starting from zero.
+This repository manages YOLO detection, validation, prediction, and tracking for microscope videos.
 
 ## 0. Start Here
 
-Open PowerShell, move to the project root, and activate the training environment.
+Open PowerShell, move to the repository root, and activate the training environment.
 
 ```powershell
-cd "C:\Users\Asus\Documents\KIST\혈액과제\Training"
-conda activate bloodps
+cd "<path-to-this-repository>"
+conda activate blood_vision
 ```
 
 If PowerShell blocks script execution, allow scripts for the current terminal session only:
@@ -23,36 +23,144 @@ Check that YOLO is available:
 yolo checks
 ```
 
-## 1. Export From CVAT
+All PowerShell workflow scripts are interactive. You can run them with no parameters, or provide only the values you already know. If a required value such as `Video`, `Version`, or `Dataset` is missing, the script asks for it in the terminal and shows a sensible default when one can be inferred.
 
-After labeling data in CVAT, export the dataset using:
+## 1. Project Layout
 
-```text
-Ultralytics YOLO Detection 1.0
-```
-
-This project expects a YOLO detection dataset with image files and YOLO `.txt` label files.
-
-## 2. Save the Exported Dataset
-
-Place the downloaded CVAT export under the `exports/` folder.
-
-Use a dataset folder name in this format:
+Video-centered projects are stored like this:
 
 ```text
-<MMDD>_v<version>
+Training/
+|- configs/
+|  `- classes/
+|     `- blood_ps.yaml
+|     `- bead_ctc.yaml
+|- videos/
+|  `- <video>/
+|     |- source/
+|     |  `- <original_video>.mp4
+|     |- exports/
+|     |  `- <version>/
+|     |- yolo/
+|     |  `- <version>/
+|     |- runs/
+|     |  |- train/
+|     |  |- val/
+|     |  |- predict/
+|     |  `- track/
+|     `- video.yaml
+`- scripts/
+   |- legacy/
+   |- new_video_project.ps1
+   |- prepare_video_dataset.ps1
+   |- train_video.ps1
+   |- val_video.ps1
+   |- predict_video.ps1
+   `- track_video.ps1
 ```
 
 Example:
 
 ```text
-exports/0706_v1/
+videos/backlight1/
+|- source/
+|  `- backlight1.mp4
+|- exports/
+|  `- 0706_v1/
+|- yolo/
+|  `- 0706_v1/
+|- runs/
+|  |- train/
+|  |- val/
+|  |- predict/
+|  `- track/
+`- video.yaml
 ```
 
-The exported dataset folder should contain:
+Class definitions are stored here:
 
 ```text
-exports/0706_v1/
+configs/classes/
+```
+
+Available class schemas:
+
+```yaml
+# configs/classes/blood_ps.yaml
+names:
+  0: ps_particle
+
+# configs/classes/bead_ctc.yaml
+names:
+  0: CTC
+  1: bead
+```
+
+For multi-class datasets, the CVAT class order must match the config exactly. For `bead_ctc.yaml`, labels must use class ID `0` for `CTC` and class ID `1` for `bead`.
+
+## 2. Create a Video Project
+
+For a new video such as `backlight1.mp4`, run:
+
+```powershell
+.\scripts\new_video_project.ps1 `
+  -VideoFile ".\backlight1.mp4" `
+  -Version "0706_v1"
+```
+
+If `-Video` is not provided, the script derives the video name from the file name. For `backlight1.mp4`, the video name becomes:
+
+```text
+backlight1
+```
+
+The script creates:
+
+```text
+videos/backlight1/source/
+videos/backlight1/exports/0706_v1/
+videos/backlight1/yolo/0706_v1/
+videos/backlight1/runs/train/0706_v1/
+videos/backlight1/runs/val/0706_v1/
+videos/backlight1/runs/predict/0706_v1/
+videos/backlight1/runs/track/0706_v1/
+videos/backlight1/video.yaml
+```
+
+Interactive mode is also available:
+
+```powershell
+.\scripts\new_video_project.ps1
+```
+
+Partial interactive mode is also supported. For example, this asks for the missing `Version` and uses the provided class config:
+
+```powershell
+.\scripts\new_video_project.ps1 `
+  -VideoFile ".\bead_ctc_4.avi" `
+  -ClassConfig "../../configs/classes/bead_ctc.yaml"
+```
+
+## 3. Label and Export From CVAT
+
+Label frames from the source video in CVAT.
+
+When exporting from CVAT, use:
+
+```text
+Ultralytics YOLO Detection 1.0
+```
+
+Place the downloaded export here:
+
+```text
+videos/backlight1/exports/0706_v1/
+```
+
+The export folder should contain:
+
+```text
+videos/backlight1/exports/0706_v1/
 |- images/
 |- labels/
 |- data.yaml
@@ -66,33 +174,41 @@ frame_000000.png
 frame_000000.txt
 ```
 
-YOLO label files should use this format:
+YOLO label files should use:
 
 ```text
 class_id x_center y_center width height
 ```
 
-## 3. Prepare the YOLO Dataset
+## 4. Prepare the YOLO Dataset
 
 Run:
 
 ```powershell
-python .\scripts\prepare_yolo_dataset.py
+.\scripts\prepare_video_dataset.ps1 -Video "backlight1" -Version "0706_v1"
 ```
 
-The script first asks for `Dataset`. This value has no default. Enter the dataset folder name under `exports/`, for example:
+This reads:
 
 ```text
-Dataset [required]: 0706_v1
+videos/backlight1/exports/0706_v1/
 ```
 
-Then it asks whether to use default values for the remaining parameters:
+and creates:
 
 ```text
-Use these default parameters? [Y/n]
+videos/backlight1/yolo/0706_v1/
 ```
 
-Default remaining values:
+Important files:
+
+```text
+videos/backlight1/yolo/0706_v1/blood_ps.yaml
+videos/backlight1/yolo/0706_v1/manifest.csv
+videos/backlight1/yolo/0706_v1/dataset_stats.json
+```
+
+Default preparation values:
 
 ```text
 Val ratio: 0.2
@@ -102,63 +218,37 @@ Keep class IDs: no
 Overwrite: no
 ```
 
-Press Enter or type `Y` to use the defaults. Type `N` to enter the remaining parameters interactively. For those remaining prompts, pressing Enter keeps the value shown in brackets.
-
-For non-interactive use:
+For multi-class datasets, pass a class config and keep the original class IDs:
 
 ```powershell
-python .\scripts\prepare_yolo_dataset.py `
-  --dataset 0706_v1 `
-  --val-ratio 0.2 `
-  --seed 42
+.\scripts\prepare_video_dataset.ps1 `
+  -Video "bead_ctc_4" `
+  -Version "0707_v1" `
+  -ClassConfig "configs/classes/bead_ctc.yaml" `
+  -KeepClassIds
 ```
 
-The prepared dataset is created here:
-
-```text
-data/yolo/0706_v1/
-```
-
-Important files to check before training:
-
-```text
-data/yolo/0706_v1/blood_ps.yaml
-data/yolo/0706_v1/manifest.csv
-data/yolo/0706_v1/dataset_stats.json
-```
-
-In `dataset_stats.json`, check:
-
-```text
-train_positive_images
-val_positive_images
-train_bboxes
-val_bboxes
-```
-
-If positive samples or bounding boxes are heavily skewed toward one split, regenerate the dataset split before training.
-
-## 4. Train the Model
-
-Run from the project root:
+Interactive mode:
 
 ```powershell
-.\train.ps1
+.\scripts\prepare_video_dataset.ps1
 ```
 
-This is a convenience wrapper that calls:
+You can also provide only the video name and let the script ask for the missing version:
 
-```text
-scripts/train.ps1
+```powershell
+.\scripts\prepare_video_dataset.ps1 -Video "bead_ctc_4"
 ```
 
-The training script first asks for `Dataset`. This value has no default.
+## 5. Train
 
-```text
-Dataset [required]: 0706_v1
+Run:
+
+```powershell
+.\scripts\train_video.ps1 -Video "backlight1" -Version "0706_v1"
 ```
 
-Then it shows the remaining default training parameters:
+Default training values:
 
 ```text
 Model: yolo11s.pt
@@ -167,147 +257,293 @@ Epochs: 100
 Batch: 4
 Device: 0
 Seed: 0
-Tag: <blank>
 RunName: auto-generated
 ```
 
-It then asks:
+Training outputs are saved under:
 
 ```text
-Use these default parameters? [Y/n]
+videos/backlight1/runs/train/0706_v1/<run_name>/
 ```
 
-Press Enter or type `Y` to train with the defaults. Type `N` to enter the remaining parameters interactively. For non-Dataset prompts, pressing Enter keeps the value shown in brackets.
+Model weights:
 
-For non-interactive training:
+```text
+videos/backlight1/runs/train/0706_v1/<run_name>/weights/best.pt
+videos/backlight1/runs/train/0706_v1/<run_name>/weights/last.pt
+```
+
+Interactive mode:
 
 ```powershell
-.\train.ps1 `
-  -Dataset "0706_v1" `
-  -Model "yolo11s.pt" `
-  -ImgSize 960 `
-  -Epochs 100 `
-  -Batch 4 `
-  -Device "0" `
-  -Seed 0
+.\scripts\train_video.ps1
 ```
 
-If `RunName` is left blank, the script automatically creates one:
+Partial interactive mode:
 
-```text
-ps_<model>_<dataset>_img<imgsz>_e<epochs>_b<batch>_s<seed>_<timestamp>
+```powershell
+.\scripts\train_video.ps1 -Video "bead_ctc_4"
 ```
 
-Example:
-
-```text
-ps_yolo11s_0706_v1_img960_e100_b4_s0_20260706_153012
-```
-
-Training outputs are saved here:
-
-```text
-runs/train/0706_v1/<run_name>/
-```
-
-## 5. Run Validation
+## 6. Validate
 
 Run:
 
 ```powershell
-.\scripts\val.ps1
+.\scripts\val_video.ps1 -Video "backlight1" -Version "0706_v1"
 ```
 
-The validation script immediately asks for parameters. There is no default for `Dataset`.
+If `RunName` and `ModelPath` are blank, the script automatically uses the latest training run for the selected video/version.
+
+Validation outputs are saved under:
 
 ```text
-Dataset [required]: 0706_v1
-RunName [blank]:
-ModelPath [blank]:
-ImgSize [960]:
-Batch [4]:
-Device [0]:
-Split [val]:
-Name [blank]:
+videos/backlight1/runs/val/0706_v1/<validation_run_name>/
 ```
 
-Usually, enter only `Dataset` and press Enter for the rest. If `RunName` and `ModelPath` are blank, the script automatically uses the latest training run under:
-
-```text
-runs/train/<dataset>/
-```
-
-For non-interactive validation:
+Interactive mode:
 
 ```powershell
-.\scripts\val.ps1 -Dataset "0706_v1"
+.\scripts\val_video.ps1
 ```
 
-Validation outputs are saved here:
+Partial interactive mode:
 
-```text
-runs/val/0706_v1/<validation_run_name>/
+```powershell
+.\scripts\val_video.ps1 -Video "bead_ctc_4"
 ```
 
-## 6. Generate Prediction Images
+## 7. Generate Prediction Images
 
 Run:
 
 ```powershell
-.\scripts\predict_val.ps1
+.\scripts\predict_video.ps1 -Video "backlight1" -Version "0706_v1"
 ```
 
-The prediction script immediately asks for parameters. There is no default for `Dataset`.
+This runs detection on:
 
 ```text
-Dataset [required]: 0706_v1
-RunName [blank]:
-ModelPath [blank]:
-Split [val]:
-ImgSize [960]:
-Conf [0.15]:
-Name [blank]:
+videos/backlight1/yolo/0706_v1/images/val/
 ```
 
-Usually, enter only `Dataset` and press Enter for the rest. If `RunName` and `ModelPath` are blank, the script automatically uses the latest training run for that dataset.
+Prediction outputs are saved under:
 
-For non-interactive prediction:
+```text
+videos/backlight1/runs/predict/0706_v1/<prediction_run_name>/
+```
+
+Interactive mode:
 
 ```powershell
-.\scripts\predict_val.ps1 `
-  -Dataset "0706_v1" `
-  -Conf 0.15
+.\scripts\predict_video.ps1
 ```
 
-Prediction images are saved here:
+Partial interactive mode:
+
+```powershell
+.\scripts\predict_video.ps1 -Video "bead_ctc_4"
+```
+
+## 8. Track the Source Video
+
+Run:
+
+```powershell
+.\scripts\track_video.ps1 -Video "backlight1" -Version "0706_v1"
+```
+
+If `RunName` and `ModelPath` are blank, the script automatically uses the latest `best.pt` model for the selected video/version.
+
+Tracking requires a trained model. If no `weights/best.pt` exists under `videos/<video>/runs/train/<version>/`, run `train_video.ps1` first or enter an existing `ModelPath` when prompted.
+
+Default tracking values:
 
 ```text
-runs/predict/0706_v1/<prediction_run_name>/
+ImgSize: 960
+Conf: 0.15
+Iou: 0.7
+Device: 0
+Tracker: bytetrack.yaml
+VidStride: 1
+Show live window: Y
+Save tracked video: Y
+Save track labels as txt: N
+Save confidence in txt labels: N
 ```
 
-## 7. Check Results
-
-### Trained Weights
-
-The trained model weights are saved under the training run:
+Tracking outputs are saved under:
 
 ```text
-runs/train/0706_v1/<run_name>/weights/
-|- best.pt
-`- last.pt
+videos/backlight1/runs/track/0706_v1/<tracking_run_name>/
 ```
 
-Use `best.pt` for most validation, prediction, and downstream usage.
+You can also track another source with the same model:
 
-### Training Metrics and Graphs
+```powershell
+.\scripts\track_video.ps1 `
+  -Video "backlight1" `
+  -Version "0706_v1" `
+  -Source ".\other_video.mp4"
+```
 
-Training metrics and graphs are saved under:
+For a webcam or stream:
+
+```powershell
+.\scripts\track_video.ps1 -Video "backlight1" -Version "0706_v1" -Source "0"
+.\scripts\track_video.ps1 -Video "backlight1" -Version "0706_v1" -Source "rtsp://example-stream-url"
+```
+
+The default tracker is `bytetrack.yaml`. Try `botsort.yaml` if object IDs switch too often.
+
+Partial interactive mode:
+
+```powershell
+.\scripts\track_video.ps1 -Video "bead_ctc_4"
+```
+
+## 9. Full Example: backlight1.mp4
+
+```powershell
+.\scripts\new_video_project.ps1 -VideoFile ".\backlight1.mp4" -Version "0706_v1"
+```
+
+Put the CVAT export into:
 
 ```text
-runs/train/0706_v1/<run_name>/
+videos/backlight1/exports/0706_v1/
 ```
 
-Important files:
+Then run:
+
+```powershell
+.\scripts\prepare_video_dataset.ps1 -Video "backlight1" -Version "0706_v1"
+.\scripts\train_video.ps1 -Video "backlight1" -Version "0706_v1"
+.\scripts\val_video.ps1 -Video "backlight1" -Version "0706_v1"
+.\scripts\predict_video.ps1 -Video "backlight1" -Version "0706_v1"
+.\scripts\track_video.ps1 -Video "backlight1" -Version "0706_v1"
+```
+
+## 10. Existing Blood PS Video Workspace
+
+The existing work for `Blood_PS particle_1.mp4` has been organized under:
+
+```text
+videos/blood_ps_particle_1/
+```
+
+Available versions:
+
+```text
+videos/blood_ps_particle_1/exports/0706_v1/
+videos/blood_ps_particle_1/exports/0706_v2/
+videos/blood_ps_particle_1/yolo/0706_v1/
+videos/blood_ps_particle_1/yolo/0706_v2/
+videos/blood_ps_particle_1/runs/train/0706_v1/
+videos/blood_ps_particle_1/runs/train/0706_v2/
+```
+
+The source video is stored at:
+
+```text
+videos/blood_ps_particle_1/source/Blood_PS particle_1.mp4
+```
+
+To continue from the latest prepared dataset and runs:
+
+```powershell
+.\scripts\train_video.ps1 -Video "blood_ps_particle_1" -Version "0706_v2"
+.\scripts\val_video.ps1 -Video "blood_ps_particle_1" -Version "0706_v2"
+.\scripts\predict_video.ps1 -Video "blood_ps_particle_1" -Version "0706_v2"
+.\scripts\track_video.ps1 -Video "blood_ps_particle_1" -Version "0706_v2"
+```
+
+## 11. Bead/CTC Video Workspace
+
+The `bead_ctc_4.avi` video uses a different class schema:
+
+```text
+0: CTC
+1: bead
+```
+
+The source video is organized here:
+
+```text
+videos/bead_ctc_4/source/bead_ctc_4.avi
+```
+
+Its metadata points to:
+
+```text
+configs/classes/bead_ctc.yaml
+```
+
+After labeling in CVAT, export with:
+
+```text
+Ultralytics YOLO Detection 1.0
+```
+
+Place the export here:
+
+```text
+videos/bead_ctc_4/exports/0707_v1/
+```
+
+The export folder should contain:
+
+```text
+videos/bead_ctc_4/exports/0707_v1/
+|- images/
+|- labels/
+|- data.yaml
+`- train.txt
+```
+
+Then run:
+
+```powershell
+.\scripts\prepare_video_dataset.ps1 `
+  -Video "bead_ctc_4" `
+  -Version "0707_v1" `
+  -ClassConfig "configs/classes/bead_ctc.yaml" `
+  -KeepClassIds
+
+.\scripts\train_video.ps1 -Video "bead_ctc_4" -Version "0707_v1"
+.\scripts\val_video.ps1 -Video "bead_ctc_4" -Version "0707_v1"
+.\scripts\predict_video.ps1 -Video "bead_ctc_4" -Version "0707_v1"
+.\scripts\track_video.ps1 -Video "bead_ctc_4" -Version "0707_v1"
+```
+
+Do not run tracking before training unless you provide `ModelPath` to an existing `.pt` file.
+
+Prepared dataset metadata will be saved under:
+
+```text
+videos/bead_ctc_4/yolo/0707_v1/
+|- dataset.yaml
+|- blood_ps.yaml
+|- manifest.csv
+`- dataset_stats.json
+```
+
+Training and tracking outputs will be saved under:
+
+```text
+videos/bead_ctc_4/runs/train/0707_v1/
+videos/bead_ctc_4/runs/track/0707_v1/
+```
+
+## 12. What to Check After Training
+
+Training metrics and graphs:
+
+```text
+videos/<video>/runs/train/<version>/<run_name>/
+```
+
+Useful files:
 
 ```text
 results.csv
@@ -320,9 +556,7 @@ BoxP_curve.png
 BoxR_curve.png
 ```
 
-### Training and Validation Preview Images
-
-YOLO also saves preview images in the training run folder:
+Training and validation previews:
 
 ```text
 train_batch*.jpg
@@ -330,75 +564,84 @@ val_batch*_labels.jpg
 val_batch*_pred.jpg
 ```
 
-The `val_batch*_pred.jpg` files are useful for quickly checking whether predictions look reasonable.
-
-### Prediction Images With Labels
-
-Images with predicted labels drawn on them are saved under:
+Tracked videos:
 
 ```text
-runs/predict/0706_v1/<prediction_run_name>/
-```
-
-Open the `.jpg` files in that folder to visually inspect detections.
-
-## Project Structure
-
-```text
-Training/
-|- train.ps1
-|- configs/
-|  `- train/
-|- data/
-|  `- yolo/
-|     `- <dataset_version>/
-|- exports/
-|  `- <dataset_version>/
-|- models/
-|  |- production/
-|  `- registry/
-|- runs/
-|  |- train/
-|  |- val/
-|  |- predict/
-|  `- cache/
-`- scripts/
-   |- _run_utils.ps1
-   |- prepare_yolo_dataset.py
-   |- train.ps1
-   |- val.ps1
-   |- predict_val.ps1
-   `- promote_model.ps1
+videos/<video>/runs/track/<version>/<tracking_run_name>/
 ```
 
 ## Script Summary
 
 | Script | Purpose |
 | --- | --- |
-| `scripts/prepare_yolo_dataset.py` | Converts a CVAT YOLO export under `exports/` into this project's `data/yolo/` training structure. |
-| `train.ps1` | Project-root wrapper for `scripts/train.ps1`. |
-| `scripts/train.ps1` | Runs `yolo detect train`. |
-| `scripts/val.ps1` | Runs `yolo detect val`. |
-| `scripts/predict_val.ps1` | Runs `yolo detect predict` on a dataset split. |
-| `scripts/_run_utils.ps1` | Shared helper functions for automatic run naming and latest-run lookup. |
-| `scripts/promote_model.ps1` | Copies selected model artifacts into `models/registry/`. |
+| `scripts/new_video_project.ps1` | Creates the standard `videos/<video>/` workspace for a source video. |
+| `scripts/prepare_video_dataset.ps1` | Converts a video-specific CVAT export into a prepared YOLO dataset. |
+| `scripts/train_video.ps1` | Runs YOLO detection training for one video/version through the active Python environment. |
+| `scripts/val_video.ps1` | Runs YOLO validation for one video/version through the active Python environment. |
+| `scripts/predict_video.ps1` | Runs YOLO prediction on the prepared validation split through the active Python environment. |
+| `scripts/track_video.ps1` | Runs YOLO tracking on the source video, webcam, or stream through the active Python environment. |
+| `scripts/_video_utils.ps1` | Shared helpers for video paths, prompts, and source-video lookup. |
+| `scripts/_run_utils.ps1` | Shared helpers for safe names, latest training run lookup, and Ultralytics execution. |
+| `scripts/prepare_yolo_dataset.py` | Core Python dataset preparation logic used by both workflows. |
+
+## Legacy Dataset Workflow
+
+The older dataset-centered scripts are still available:
+
+```text
+scripts/legacy/train_root.ps1
+scripts/legacy/train.ps1
+scripts/legacy/val.ps1
+scripts/legacy/predict_val.ps1
+scripts/legacy/promote_model.ps1
+```
+
+These use:
+
+```text
+exports/<dataset>/
+data/yolo/<dataset>/
+runs/<mode>/<dataset>/
+```
+
+For new video work, prefer the video-centered scripts.
 
 ## Git Policy
 
-The `.gitignore` file is allowlist-based. Running `git add .` should only track the files below.
+The `.gitignore` file is allowlist-based. Running `git add .` should track source code, docs, configs, and lightweight metadata only.
 
-Tracked files:
+Tracked examples:
 
 ```text
 README.md
 .gitignore
-train.ps1
 scripts/
 configs/
 models/production/current.yaml
 data/yolo/*/blood_ps.yaml
 data/yolo/*/manifest.csv
 data/yolo/*/dataset_stats.json
+videos/*/video.yaml
+videos/*/yolo/*/dataset.yaml
+videos/*/yolo/*/blood_ps.yaml
+videos/*/yolo/*/manifest.csv
+videos/*/yolo/*/dataset_stats.json
 ```
 
-Raw images, labels, run outputs, model weights, caches, and local environment files are not tracked.
+Ignored examples:
+
+```text
+videos/*/source/
+videos/*/exports/
+videos/*/runs/
+videos/*/yolo/*/images/
+videos/*/yolo/*/labels/
+exports/
+runs/
+models/registry/
+*.pt
+*.mp4
+*.avi
+*.jpg
+*.png
+```

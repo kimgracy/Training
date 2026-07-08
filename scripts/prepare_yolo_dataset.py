@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import random
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -16,9 +17,13 @@ IGNORED_LABEL_FILES = {"train.txt", "val.txt", "test.txt", "obj.names", "obj.dat
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare a YOLO detection dataset.")
     parser.add_argument("--dataset", default="", help="Dataset version under exports/. Required for non-interactive runs.")
+    parser.add_argument("--export-dir", default="", help="Explicit CVAT export directory. Defaults to exports/<dataset>.")
+    parser.add_argument("--output-dir", default="", help="Explicit prepared YOLO output directory. Defaults to data/yolo/<dataset>.")
     parser.add_argument("--val-ratio", type=float, default=0.2, help="Validation split ratio.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for splitting.")
     parser.add_argument("--class-name", default="ps_particle", help="Single class name.")
+    parser.add_argument("--class-names", nargs="+", default=[], help="Class names in YOLO class ID order.")
+    parser.add_argument("--class-config", default="", help="Dataset class config YAML with a names block.")
     parser.add_argument(
         "--keep-class-ids",
         action="store_true",
@@ -35,7 +40,10 @@ def parse_args() -> argparse.Namespace:
     if interactive:
         args = prompt_for_args(args)
     elif not args.dataset.strip():
-        parser.error("--dataset is required for non-interactive runs.")
+        if sys.stdin.isatty():
+            args.dataset = read_required_str("Dataset")
+        else:
+            parser.error("--dataset is required for non-interactive runs.")
     return args
 
 
@@ -116,7 +124,10 @@ def prompt_for_args(args: argparse.Namespace) -> argparse.Namespace:
     print("Enter dataset preparation parameters. Press Enter to keep the value shown in brackets.")
     args.val_ratio = read_float_with_default("Val ratio", args.val_ratio)
     args.seed = read_int_with_default("Seed", args.seed)
-    args.class_name = read_str_with_default("Class name", args.class_name)
+    class_names_text = read_str_with_default("Class names, comma-separated", args.class_name)
+    args.class_names = [name.strip() for name in class_names_text.split(",") if name.strip()]
+    if len(args.class_names) == 1:
+        args.class_name = args.class_names[0]
     args.keep_class_ids = read_choice("Keep original class IDs instead of remapping to 0?", default=args.keep_class_ids)
     args.overwrite = read_choice("Overwrite output dataset if it already exists?", default=args.overwrite)
     print()
@@ -136,19 +147,30 @@ def build_label_index(root: Path) -> dict[str, Path]:
     return label_index
 
 
-def normalized_label_lines(src_label: Path | None, remap_to_zero: bool) -> list[str]:
+def normalized_label_lines(src_label: Path | None, remap_to_zero: bool, class_count: int) -> tuple[list[str], dict[int, int]]:
     if src_label is None or not src_label.exists():
-        return []
+        return [], {}
 
     out_lines: list[str] = []
+    class_counts: dict[int, int] = {}
     for raw_line in src_label.read_text(encoding="utf-8", errors="ignore").splitlines():
         parts = raw_line.strip().split()
         if len(parts) < 5:
             continue
+        try:
+            class_id = int(parts[0])
+        except ValueError:
+            continue
+
         if remap_to_zero:
+            class_id = 0
             parts[0] = "0"
+        elif class_id < 0 or class_id >= class_count:
+            raise ValueError(f"Class ID {class_id} in {src_label} is outside configured range 0..{class_count - 1}")
+
+        class_counts[class_id] = class_counts.get(class_id, 0) + 1
         out_lines.append(" ".join(parts[:5]))
-    return out_lines
+    return out_lines, class_counts
 
 
 def split_group(items: list[dict], val_ratio: float) -> tuple[list[dict], list[dict]]:
@@ -160,14 +182,105 @@ def split_group(items: list[dict], val_ratio: float) -> tuple[list[dict], list[d
     return items[val_count:], items[:val_count]
 
 
-def write_dataset_yaml(out_dir: Path, class_name: str) -> None:
+def quote_yaml_value(value: str) -> str:
+    if re.search(r"[:#\[\]{},&*?|\-<>=!%@`]", value):
+        return json.dumps(value)
+    return value
+
+
+def write_dataset_yaml(out_dir: Path, class_names: list[str]) -> None:
+    names_text = "\n".join(f"  {idx}: {quote_yaml_value(name)}" for idx, name in enumerate(class_names))
     yaml_text = f"""train: images/train
 val: images/val
 
 names:
-  0: {class_name}
+{names_text}
 """
+    (out_dir / "dataset.yaml").write_text(yaml_text, encoding="utf-8")
     (out_dir / "blood_ps.yaml").write_text(yaml_text, encoding="utf-8")
+
+
+def resolve_project_path(project_root: Path, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return project_root / path
+
+
+def manifest_path(path: Path, project_root: Path) -> str:
+    try:
+        return path.relative_to(project_root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def strip_yaml_value(value: str) -> str:
+    value = value.strip()
+    if "#" in value:
+        value = value.split("#", 1)[0].strip()
+    return value.strip().strip('"').strip("'")
+
+
+def parse_inline_names(value: str) -> list[str]:
+    value = value.strip()
+    if not (value.startswith("[") and value.endswith("]")):
+        return []
+    inner = value[1:-1].strip()
+    if not inner:
+        return []
+    return [strip_yaml_value(part) for part in inner.split(",") if strip_yaml_value(part)]
+
+
+def read_class_names_from_config(config_path: Path) -> list[str]:
+    if not config_path.exists():
+        raise RuntimeError(f"Class config not found: {config_path}")
+
+    names: dict[int, str] = {}
+    list_names: list[str] = []
+    in_names = False
+
+    for line in config_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if not in_names:
+            match = re.match(r"^\s*names\s*:\s*(.*)$", line)
+            if not match:
+                continue
+            tail = match.group(1).strip()
+            inline_names = parse_inline_names(tail)
+            if inline_names:
+                return inline_names
+            in_names = True
+            continue
+
+        if line.strip() and not line.startswith((" ", "\t", "-")):
+            break
+
+        indexed = re.match(r"^\s*(\d+)\s*:\s*(.+?)\s*$", line)
+        if indexed:
+            names[int(indexed.group(1))] = strip_yaml_value(indexed.group(2))
+            continue
+
+        listed = re.match(r"^\s*-\s*(.+?)\s*$", line)
+        if listed:
+            list_names.append(strip_yaml_value(listed.group(1)))
+
+    if names:
+        max_index = max(names)
+        return [names.get(idx, f"class_{idx}") for idx in range(max_index + 1)]
+    if list_names:
+        return list_names
+
+    raise RuntimeError(f"No names block found in class config: {config_path}")
+
+
+def resolve_class_names(args: argparse.Namespace, project_root: Path) -> list[str]:
+    if args.class_config:
+        class_config = resolve_project_path(project_root, args.class_config)
+        return read_class_names_from_config(class_config)
+
+    if args.class_names:
+        return [name.strip() for name in args.class_names if name.strip()]
+
+    return [args.class_name.strip()]
 
 
 def main() -> None:
@@ -176,8 +289,13 @@ def main() -> None:
         raise ValueError(f"--val-ratio must be between 0 and 1, got {args.val_ratio}")
 
     project_root = Path(__file__).resolve().parents[1]
-    raw_dir = project_root / "exports" / args.dataset
-    out_dir = project_root / "data" / "yolo" / args.dataset
+    raw_dir = resolve_project_path(project_root, args.export_dir) if args.export_dir else project_root / "exports" / args.dataset
+    out_dir = resolve_project_path(project_root, args.output_dir) if args.output_dir else project_root / "data" / "yolo" / args.dataset
+    class_names = resolve_class_names(args, project_root)
+    if not class_names:
+        raise ValueError("At least one class name is required.")
+
+    remap_to_zero = not args.keep_class_ids and len(class_names) == 1
 
     if not raw_dir.exists():
         raise RuntimeError(f"Export directory not found: {raw_dir}")
@@ -195,15 +313,19 @@ def main() -> None:
 
     label_index = build_label_index(raw_dir)
     rows: list[dict] = []
+    total_class_counts = {idx: 0 for idx in range(len(class_names))}
     for image in images:
         src_label = label_index.get(image.stem)
-        label_lines = normalized_label_lines(src_label, remap_to_zero=not args.keep_class_ids)
+        label_lines, class_counts = normalized_label_lines(src_label, remap_to_zero=remap_to_zero, class_count=len(class_names))
+        for class_id, count in class_counts.items():
+            total_class_counts[class_id] = total_class_counts.get(class_id, 0) + count
         rows.append(
             {
                 "image": image,
                 "label": src_label,
                 "label_lines": label_lines,
                 "bbox_count": len(label_lines),
+                "class_counts": class_counts,
             }
         )
 
@@ -233,15 +355,15 @@ def main() -> None:
         manifest_rows.append(
             {
                 "subset": subset,
-                "image": dst_img.relative_to(project_root).as_posix(),
-                "label": dst_lbl.relative_to(project_root).as_posix(),
-                "source_image": image.relative_to(project_root).as_posix(),
-                "source_label": row["label"].relative_to(project_root).as_posix() if row["label"] else "",
+                "image": manifest_path(dst_img, project_root),
+                "label": manifest_path(dst_lbl, project_root),
+                "source_image": manifest_path(image, project_root),
+                "source_label": manifest_path(row["label"], project_root) if row["label"] else "",
                 "bbox_count": row["bbox_count"],
             }
         )
 
-    write_dataset_yaml(out_dir, args.class_name)
+    write_dataset_yaml(out_dir, class_names)
 
     with (out_dir / "manifest.csv").open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
@@ -253,7 +375,10 @@ def main() -> None:
 
     stats = {
         "dataset": args.dataset,
-        "class_name": args.class_name,
+        "class_name": class_names[0],
+        "class_names": class_names,
+        "class_counts": {str(class_id): total_class_counts.get(class_id, 0) for class_id in range(len(class_names))},
+        "keep_class_ids": not remap_to_zero,
         "seed": args.seed,
         "val_ratio": args.val_ratio,
         "total_images": len(rows),

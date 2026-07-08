@@ -8,9 +8,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-. (Join-Path $PSScriptRoot "_run_utils.ps1")
+. (Join-Path $PSScriptRoot "..\_run_utils.ps1")
 
-$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$Root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 if ([string]::IsNullOrWhiteSpace($RunName)) {
     $LatestRun = Get-LatestYoloTrainRun -Root $Root -Dataset $Dataset

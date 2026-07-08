@@ -1,5 +1,5 @@
 ﻿{
-    "dataset":  "0706_v1",
+    "dataset":  "blood_ps_particle_1_0706_v1",
     "class_name":  "ps_particle",
     "total_images":  60,
     "total_bboxes":  42,

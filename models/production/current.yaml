@@ -1,4 +1,0 @@
-ps_particle:
-  current: null
-  candidates:
-    - models/registry/ps_particle/ps_yolo11s/20260706_0154_0706_v1

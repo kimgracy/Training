@@ -1,0 +1,5 @@
+video: blood_ps_particle_1
+default_version: 0706_v2
+source_video: source/Blood_PS particle_1.mp4
+dataset_prefix: blood_ps_particle_1
+class_config: ../../configs/classes/blood_ps.yaml

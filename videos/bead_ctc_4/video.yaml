@@ -1,0 +1,5 @@
+﻿video: bead_ctc_4
+default_version: 0707_v1
+source_video: source/bead_ctc_4.avi
+dataset_prefix: bead_ctc_4
+class_config: ../../configs/classes/bead_ctc.yaml

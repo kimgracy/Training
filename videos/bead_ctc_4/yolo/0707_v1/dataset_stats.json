@@ -1,0 +1,23 @@
+{
+  "dataset": "bead_ctc_4_0707_v1",
+  "class_name": "CTC",
+  "class_names": [
+    "CTC",
+    "bead"
+  ],
+  "class_counts": {
+    "0": 224,
+    "1": 154
+  },
+  "keep_class_ids": true,
+  "seed": 42,
+  "val_ratio": 0.2,
+  "total_images": 43,
+  "total_bboxes": 378,
+  "train_images": 34,
+  "train_positive_images": 34,
+  "train_bboxes": 297,
+  "val_images": 9,
+  "val_positive_images": 9,
+  "val_bboxes": 81
+}

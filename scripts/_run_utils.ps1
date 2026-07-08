@@ -12,6 +12,37 @@ function ConvertTo-YoloSafeName {
     return $Safe
 }
 
+function Invoke-Yolo {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments
+    )
+
+    $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
+    if ($null -eq $PythonCommand) {
+        throw "python was not found on PATH. Activate the correct conda environment first."
+    }
+
+    $PythonExecutable = $PythonCommand.Source
+    if ([string]::IsNullOrWhiteSpace($PythonExecutable)) {
+        $PythonExecutable = $PythonCommand.Path
+    }
+    if ([string]::IsNullOrWhiteSpace($PythonExecutable)) {
+        $PythonExecutable = "python"
+    }
+
+    $Entrypoint = "from ultralytics.cfg import entrypoint; entrypoint()"
+
+    Write-Host "python      : $PythonExecutable"
+    Write-Host "ultralytics : python -c <ultralytics entrypoint> $($Arguments -join ' ')"
+
+    & $PythonExecutable -c $Entrypoint @Arguments
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Ultralytics command failed with exit code $LASTEXITCODE"
+    }
+}
+
 function Get-YoloModelStem {
     param(
         [Parameter(Mandatory = $true)]
@@ -69,6 +100,15 @@ function Get-LatestYoloTrainRun {
     )
 
     $TrainRoot = Join-Path $Root "runs\train\$Dataset"
+    return Get-LatestYoloTrainRunFromPath -TrainRoot $TrainRoot
+}
+
+function Get-LatestYoloTrainRunFromPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$TrainRoot
+    )
+
     if (-not (Test-Path -LiteralPath $TrainRoot)) {
         throw "Training run directory not found: $TrainRoot"
     }
